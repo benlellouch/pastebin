@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+    <body>
+        <h1>Pastebin</h1>
+
+        <h2>You can view your pastes</h2>
+        {% block content %}
+            <ul>
+                {% for p in pastes%}
+                    <p><a href="/{{ p }}">{{ p }}</a></p>
+                {% endfor %}
+            </ul>
+
+        {% endblock content %}
+
+        <h2>Or create a new one</h2>
+
+        <form action="" target="_blank" method="POST">
+            <label for="content">Input your paste:</label>
+            <input type="text" id="content" name="content"/>
+            <input type="submit" value="Submit"/>
+        </form>
+
+    </body>
+</html>

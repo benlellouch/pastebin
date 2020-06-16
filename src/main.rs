@@ -1,6 +1,8 @@
 #![feature(proc_macro_hygiene, decl_macro)]
 
 #[macro_use] extern crate rocket;
+#[macro_use] extern crate serde_derive;
+
 
 mod paste_id;
 
@@ -8,11 +10,13 @@ use paste_id::PasteId;
 use std::io;
 use std::path::Path;
 use std::fs::File;
+use std::fs;
 use std::io::prelude::*;
 
 use rocket::Data;
 use rocket::http::RawStr;
 use rocket::request::Form;
+use rocket_contrib::templates::Template;
 
 #[derive(FromForm)]
 struct Paste
@@ -20,10 +24,33 @@ struct Paste
     content: String
 }
 
-#[get("/")]
-fn index() -> Option<File>
+#[derive(Serialize)]
+struct PasteTemplate
 {
-    File::open("static/index.html").ok()
+    pastes: Vec<String>
+}
+
+#[get("/")]
+fn index() -> Template
+{
+    let path = Path::new("./upload/");
+    let pastes = PasteTemplate{pastes: read_dir(&path)};
+    Template::render("index", &pastes)
+}
+
+fn read_dir(path: &Path) -> Vec<String>
+{
+    let paths = fs::read_dir(path).unwrap();
+    let mut pastes: Vec<String> = vec![];
+    for path in paths
+    {
+        let unwrapped_path = path.unwrap().path();
+        let path_str = unwrapped_path.to_str().unwrap();
+        let path_str = path_str.replace("./upload/", "");
+        pastes.push(String::from(path_str));
+    }
+
+    pastes
 }
 
 #[post("/", data = "<paste>")]
@@ -49,5 +76,6 @@ fn retrieve(id: PasteId) -> Option<File>
 fn main() {
     rocket::ignite()
     .mount("/", routes![index, upload, retrieve])
+    .attach(Template::fairing())
     .launch();
 }
