@@ -1,5 +1,7 @@
 use std::fmt;
 use std::borrow::Cow;
+use rocket::http::RawStr;
+use rocket::request::FromParam;
 
 use rand::{self, Rng};
 
@@ -8,6 +10,29 @@ const BASE62: &[u8] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrst
 
 /// A _probably_ unique paste ID.
 pub struct PasteId<'a>(Cow<'a, str>);
+
+
+/// Returns `true` if `id` is a valid paste ID and `false` otherwise.
+fn valid_id(id: &str) -> bool {
+    id.chars().all(|c| {
+        (c >= 'a' && c <= 'z')
+            || (c >= 'A' && c <= 'Z')
+            || (c >= '0' && c <= '9')
+    })
+}
+
+/// Returns an instance of `PasteId` if the path segment is a valid ID.
+/// Otherwise returns the invalid ID as the `Err` value.
+impl<'a> FromParam<'a> for PasteId<'a> {
+    type Error = &'a RawStr;
+
+    fn from_param(param: &'a RawStr) -> Result<PasteId<'a>, &'a RawStr> {
+        match valid_id(param) {
+            true => Ok(PasteId(Cow::Borrowed(param))),
+            false => Err(param)
+        }
+    }
+}
 
 impl<'a> PasteId<'a> {
     /// Generate a _probably_ unique ID with `size` characters. For readability,
