@@ -1,2 +1,2 @@
 # pastebin
-a pastebin using rocket, a rust wed development framework
+a pastebin using rocket, a rust web development framework
