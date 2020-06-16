@@ -8,46 +8,46 @@ use paste_id::PasteId;
 use std::io;
 use std::path::Path;
 use std::fs::File;
+use std::io::prelude::*;
 
 use rocket::Data;
 use rocket::http::RawStr;
+use rocket::request::Form;
 
+#[derive(FromForm)]
+struct Paste
+{
+    content: String
+}
 
 #[get("/")]
-fn index() -> &'static str
+fn index() -> Option<File>
 {
-    "
-    USAGE
-
-    POST /
-
-        accepts raw data in the body of the request and responds with a URL of
-        a page containing the body's content
-
-    GET /<id>
-
-        retrieves the content for the paste with id `<id>`
-    "
+    File::open("static/index.html").ok()
 }
 
 #[post("/", data = "<paste>")]
-fn upload(paste: Data) -> Result<String, std::io::Error>
+fn upload(paste: Form<Paste>) -> Result<String, std::io::Error>
 {
     let id = PasteId::new(3);
     let filename = format!("upload/{id}", id = id);
     let url = format!("{host}/{id}\n", host = "http://localhost:8000", id = id);
 
-    paste.stream_to_file(Path::new(&filename))?;
+    let mut file = File::create(&filename)?;
+    file.write(paste.content.as_bytes())?;
+
     Ok(url)
 }
 
 #[get("/<id>")]
-fn retrieve(id: &RawStr) -> Option<File>
+fn retrieve(id: PasteId) -> Option<File>
 {
     let filename = format!("upload/{id}", id = id);
     File::open(&filename).ok()
 }
 
 fn main() {
-    rocket::ignite().mount("/", routes![index, upload, retrieve]).launch();
+    rocket::ignite()
+    .mount("/", routes![index, upload, retrieve])
+    .launch();
 }
