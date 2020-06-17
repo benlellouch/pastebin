@@ -11,14 +11,26 @@
                 {% endfor %}
             </ul>
 
-        {% endblock content %}
 
         <h2>Or create a new one</h2>
 
-        <form action="" target="_blank" method="POST">
+        <form action="" target="_self" method="POST">
             <label for="content">Input your paste:</label>
             <input type="text" id="content" name="content"/>
-            <input type="submit" value="Submit"/>
+            <input type="submit" value="Create"/>
+        </form>
+
+        <h2>Or delete a paste</h2>
+
+        <form action="/delete" method="POST">
+            <label for="pastes">Select a paste</label>
+            <Select name="pastes" id="pastes">
+                    {% for p in pastes%}
+                        <option value="{{ p }}">{{ p }}</option>
+                    {% endfor %}
+                {% endblock content %}
+            </Select>
+            <input type="submit" value="Delete">
         </form>
 
     </body>
