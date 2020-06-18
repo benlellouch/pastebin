@@ -2,91 +2,108 @@
 
 #[macro_use] extern crate rocket;
 #[macro_use] extern crate serde_derive;
-
-
-mod paste_id;
-
-use paste_id::PasteId;
-use std::path::Path;
-use std::fs::File;
-use std::fs;
-use std::io::prelude::*;
+#[macro_use] extern crate rocket_contrib;
 
 
 use rocket::request::Form;
 use rocket_contrib::templates::Template;
+use rocket_contrib::databases::rusqlite;
 use rocket::response::{Redirect, Flash};
 
 #[derive(FromForm)]
-struct Paste
+struct PasteForm
 {
+    name: String,
     content: String
 }
 
 #[derive(FromForm)]
 struct DeletePaste
 {
-    pastes: String
+    paste_id: u32
 }
 
 #[derive(Serialize)]
 struct PasteTemplate
 {
-    pastes: Vec<String>
+    pastes: Vec<Paste>
 }
+
+#[derive(Debug, Serialize)]
+struct Paste
+{
+    id: i32,
+    name: String,
+    content: String,
+}
+
+#[database("pastes_db")]
+struct DbConn(rusqlite::Connection);
 
 #[get("/")]
-fn index() -> Template
+fn index(conn: DbConn) -> Template
 {
-    let path = Path::new("./upload/");
-    let pastes = PasteTemplate{pastes: read_dir(&path)};
-    Template::render("index", &pastes)
-}
-
-fn read_dir(path: &Path) -> Vec<String>
-{
-    let paths = fs::read_dir(path).unwrap();
-    let mut pastes: Vec<String> = vec![];
-    for path in paths
+    let mut stmt = conn.prepare("SELECT id, name, content FROM pastes").unwrap();
+    let pastes = stmt.query_map(&[], |row|
     {
-        let unwrapped_path = path.unwrap().path();
-        let path_str = unwrapped_path.to_str().unwrap();
-        let path_str = path_str.replace("./upload/", "");
-        pastes.push(String::from(path_str));
+        Paste
+        {
+            id: row.get(0),
+            name: row.get(1),
+            content: row.get(2)
+        }
     }
+    ).unwrap().map(|paste| paste.unwrap());
 
-    pastes
+    let pastes_templ = PasteTemplate{pastes: pastes.collect()};
+    Template::render("index", &pastes_templ)
 }
 
 #[post("/", data = "<paste>")]
-fn upload(paste: Form<Paste>) -> Result<Flash<Redirect>, std::io::Error>
+fn upload(conn: DbConn, paste: Form<PasteForm>) -> Result<Flash<Redirect>, rocket_contrib::databases::rusqlite::Error>
 {
-    let id = PasteId::new(3);
-    let filename = format!("upload/{id}", id = id);
-
-    let mut file = File::create(&filename)?;
-    file.write(paste.content.as_bytes())?;
+    conn.execute("INSERT INTO pastes (name, content) VALUES (?1, ?2)",
+                &[&paste.name, &paste.content])?;
 
     Ok(Flash::success(Redirect::to("/"), "Successfully created paste"))
 }
 
 #[post("/delete", data="<paste>")]
-fn delete(paste: Form<DeletePaste>) -> Result<Flash<Redirect>, std::io::Error>
+fn delete(conn: DbConn, paste: Form<DeletePaste>) -> Result<Flash<Redirect>, rocket_contrib::databases::rusqlite::Error>
 {
-    fs::remove_file(format!("upload/{id}", id = paste.pastes))?;
+    conn.execute("DELETE FROM pastes WHERE id = ?", &[&paste.paste_id])?;
     Ok(Flash::success(Redirect::to("/"), "Successfully deleted paste"))
 }
 
 #[get("/<id>")]
-fn retrieve(id: PasteId) -> Option<File>
+fn retrieve(conn: DbConn, id: u32) -> Option<Template>
 {
-    let filename = format!("upload/{id}", id = id);
-    File::open(&filename).ok()
+    let mut stmt = conn.prepare("SELECT id, name, content FROM pastes WHERE id = ?").unwrap();
+    let result = stmt.query_map(&[&id], |row|
+        {
+          Paste
+          {
+              id: row.get(0),
+              name: row.get(1),
+              content: row.get(2)
+          }  
+        }
+    ).unwrap().map(|paste| paste.unwrap());
+
+    let mut pastes: Vec<Paste> = result.collect();
+    let paste = pastes.pop();
+    match paste
+    {
+        Some(p) => Some(Template::render("paste", &p)),
+        None => None
+    }
 }
+    
 
 fn main() {
     rocket::ignite()
     .mount("/", routes![index, upload, retrieve, delete])
     .attach(Template::fairing())
+    .attach(DbConn::fairing())
     .launch();
 }

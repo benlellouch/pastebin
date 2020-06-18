@@ -1,0 +1,2 @@
+[global.databases]
+pastes_db = {url = "database/database.sqlite"}
